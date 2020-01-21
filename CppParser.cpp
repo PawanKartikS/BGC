@@ -108,12 +108,24 @@ CppParser::trackHeapAllocs(void) {
         container.push({func, {var}});
       }
 
-    } else if (clang_getCursorKind(child) ==
-               CXCursorKind::CXCursor_VarDecl) {
-      var = CppParser::cursorName(child);
-    } else if (clang_getCursorKind(child) ==
-               CXCursorKind::CXCursor_FunctionDecl) {
-      func = CppParser::cursorName(child);
+    } else {
+      CXCursorKind kind = clang_getCursorKind(child);
+      if (kind == CXCursorKind::CXCursor_VarDecl) {
+        var = CppParser::cursorName(child);
+      } else if (kind ==
+                 CXCursorKind::CXCursor_FunctionDecl) {
+        func = CppParser::cursorName(child);
+      } else if (kind == CXCursorKind::CXCursor_CallExpr &&
+                 CppParser::cursorName(child) == "free") {
+        const int kargs =
+            clang_Cursor_getNumArguments(child);
+
+        /**
+         * This is the variable that is being free'd.
+         * TODO: Pop from the container.
+         * clang_Cursor_getArgument(child, 0);
+         */
+      }
     }
 
     return CXChildVisit_Recurse;

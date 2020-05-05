@@ -72,9 +72,8 @@ CppParser::enumNodes(
 bool
 CppParser::isValidTU(const string &filename) {
   auto pos = filename.find(".");
-  return pos == string::npos
-             ? false
-             : (filename.substr(pos + 1) == "c");
+  return pos != string::npos &&
+         filename.substr(pos + 1) == "c";
 }
 
 // Tracks all the heap allocations in the translation unit.

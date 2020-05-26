@@ -5,6 +5,7 @@
 #include "CppParser.hpp"
 #include <iostream>
 #include <stdexcept>
+#include <unordered_set>
 
 CppParser::CppParser(const string &translationUnit)
     : _translationUnit(
@@ -83,28 +84,29 @@ stack<pair<string, vector<string>>>
 CppParser::trackHeapAllocs(void) {
   static string var;
   static string func;
-  static stack<pair<string, vector<string>>> container;
+  static unordered_set<string> freed;
+  static stack<pair<string, vector<string>>> heapalloc;
 
   auto lambda =
       [](CXCursor child, CXCursor parent,
          CXClientData data) -> CXChildVisitResult {
     if (CppParser::cursorName(child) == "malloc") {
       // first entry
-      if (container.empty()) {
-        container.push({func, {var}});
+      if (heapalloc.empty()) {
+        heapalloc.push({func, {var}});
         return CXChildVisit_Recurse;
       }
 
-      auto lFunc = container.top().first;
-      auto lVar = container.top().second.back();
+      auto lFunc = heapalloc.top().first;
+      auto lVar = heapalloc.top().second.back();
 
       // we're within the function's scope
       if (lFunc == func) {
         if (lVar != var)
-          container.top().second.push_back(var);
+          heapalloc.top().second.push_back(var);
       } else {
         // out of function's scope
-        container.push({func, {var}});
+        heapalloc.push({func, {var}});
       }
 
     } else {
@@ -116,14 +118,22 @@ CppParser::trackHeapAllocs(void) {
         func = CppParser::cursorName(child);
       } else if (kind == CXCursorKind::CXCursor_CallExpr &&
                  CppParser::cursorName(child) == "free") {
+        /**
+         * TODO:
+         * There's no need to call
+         * clang_Cursor_getNumArguments() as free() takes
+         * only 1 argument.
+         */
         const int kargs =
             clang_Cursor_getNumArguments(child);
 
-        /**
-         * This is the variable that is being free'd.
-         * TODO: Pop from the container.
-         * clang_Cursor_getArgument(child, 0);
-         */
+        /* The var that we've freed */
+        auto arg = CppParser::cursorName(
+            clang_Cursor_getArgument(child, 0));
+        auto funcScope = heapalloc.top().first;
+        /* Mark as freed */
+        auto key = funcScope + "-" + arg;
+        freed.insert(key);
       }
     }
 
@@ -131,5 +141,19 @@ CppParser::trackHeapAllocs(void) {
   };
 
   CppParser::enumNodes(lambda);
-  return container;
+
+  stack<pair<string, vector<string>>> heapVars;
+  while (!heapalloc.empty()) {
+    auto p = heapalloc.top();
+    auto func = p.first;
+    heapalloc.pop();
+
+    for (const auto &var : p.second) {
+      auto key = func + "-" + var;
+      if (freed.find(key) == freed.end())
+        heapVars.push({func, {var}});
+    }
+  }
+
+  return heapVars;
 }

@@ -15,20 +15,25 @@ void bar(void) {
   int *x = malloc(sizeof(int));
   int *y = malloc(sizeof(int));
   int *z = y;
+
+  free(y);
 }
 
 int main(int argc, char **argv) {
   const char *arg = argv[1];
+  const int *ptr  = malloc(sizeof(int));
+  free(ptr);
 
   return 0;
 }
+
 ```
 
 `./Main Main.c`
 ```
-bar(): 
-y
-x
 foo(): 
 s
+bar(): 
+x
+
 ```
